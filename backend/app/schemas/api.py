@@ -51,6 +51,51 @@ class AuthToken(BaseModel):
     user: UserOut
 
 
+class TeamBase(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = None
+    status: Literal["active", "archived"] = "active"
+
+
+class TeamCreate(TeamBase):
+    pass
+
+
+class TeamUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = None
+    status: Literal["active", "archived"] | None = None
+
+
+class TeamOut(TeamBase, ORMModel):
+    id: int
+    owner_id: int
+    role: str | None = None
+    member_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class TeamMemberOut(ORMModel):
+    id: int
+    team_id: int
+    user_id: int
+    username: str
+    email: str | None = None
+    nickname: str | None = None
+    role: str
+    joined_at: datetime
+
+
+class TeamMemberCreate(BaseModel):
+    username: str
+    role: Literal["admin", "leader", "member", "viewer"] = "member"
+
+
+class TeamMemberUpdate(BaseModel):
+    role: Literal["admin", "leader", "member", "viewer"]
+
+
 class ProjectBase(BaseModel):
     name: str
     description: str | None = None
@@ -164,6 +209,23 @@ class WorkLogOut(WorkLogBase, ORMModel):
     user_id: int
     created_at: datetime
     updated_at: datetime
+
+
+class AttachmentOut(ORMModel):
+    id: int
+    related_type: str
+    related_id: int
+    file_name: str
+    file_url: str
+    mime_type: str | None = None
+    file_size: int
+    summary: str | None = None
+    uploader_id: int
+    created_at: datetime
+
+
+class AttachmentUpdate(BaseModel):
+    summary: str | None = None
 
 
 class OvertimeBase(BaseModel):

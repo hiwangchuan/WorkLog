@@ -39,6 +39,40 @@ export interface WorkLog {
   visibility: string;
 }
 
+export interface Attachment {
+  id: number;
+  related_type: string;
+  related_id: number;
+  file_name: string;
+  file_url: string;
+  mime_type?: string;
+  file_size: number;
+  summary?: string;
+  created_at: string;
+}
+
+export interface Team {
+  id: number;
+  name: string;
+  description?: string;
+  status: string;
+  owner_id: number;
+  role?: string;
+  member_count: number;
+  created_at: string;
+}
+
+export interface TeamMember {
+  id: number;
+  team_id: number;
+  user_id: number;
+  username: string;
+  email?: string;
+  nickname?: string;
+  role: string;
+  joined_at: string;
+}
+
 export interface OvertimeLog {
   id: number;
   overtime_date: string;
@@ -121,6 +155,21 @@ export const workLogApi = {
   remove: (id: number) => apiDelete(`/work-logs/${id}`)
 };
 
+export const attachmentApi = {
+  list: (relatedType: string, relatedId: number) => apiGet<Attachment[]>("/attachments", { related_type: relatedType, related_id: relatedId }),
+  upload: (relatedType: string, relatedId: number, file: File, summary?: string) => {
+    const form = new FormData();
+    form.append("related_type", relatedType);
+    form.append("related_id", String(relatedId));
+    if (summary) form.append("summary", summary);
+    form.append("file", file);
+    return apiPost<Attachment>("/attachments", form);
+  },
+  update: (id: number, data: Partial<Attachment>) => apiPut<Attachment>(`/attachments/${id}`, data),
+  remove: (id: number) => apiDelete(`/attachments/${id}`),
+  downloadUrl: (id: number) => `/api/attachments/${id}/download`
+};
+
 export const overtimeApi = {
   list: (params?: Record<string, unknown>) => apiGet<PageData<OvertimeLog>>("/overtime-logs", params),
   create: (data: Partial<OvertimeLog>) => apiPost<OvertimeLog>("/overtime-logs", data),
@@ -153,6 +202,17 @@ export const statisticsApi = {
   projects: () => apiGet<any[]>("/statistics/projects"),
   workTypes: () => apiGet<any[]>("/statistics/work-types"),
   heatmap: () => apiGet<any[]>("/statistics/calendar-heatmap")
+};
+
+export const teamApi = {
+  list: (params?: Record<string, unknown>) => apiGet<PageData<Team>>("/teams", params),
+  create: (data: Partial<Team>) => apiPost<Team>("/teams", data),
+  update: (id: number, data: Partial<Team>) => apiPut<Team>(`/teams/${id}`, data),
+  remove: (id: number) => apiDelete(`/teams/${id}`),
+  members: (id: number) => apiGet<TeamMember[]>(`/teams/${id}/members`),
+  addMember: (id: number, data: { username: string; role: string }) => apiPost<TeamMember>(`/teams/${id}/members`, data),
+  updateMember: (teamId: number, memberId: number, role: string) => apiPut(`/teams/${teamId}/members/${memberId}`, { role }),
+  removeMember: (teamId: number, memberId: number) => apiDelete(`/teams/${teamId}/members/${memberId}`)
 };
 
 export function exportUrl(recordId: number, format = "markdown") {

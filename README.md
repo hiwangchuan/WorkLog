@@ -51,7 +51,7 @@ npm run dev
 
 ```bash
 cp .env.example .env
-# 修改 .env 中的 POSTGRES_PASSWORD、JWT_SECRET_KEY、CONFIG_ENCRYPTION_KEY、HOST_PORT
+# 修改 .env 中的 CONTAINER_PREFIX、POSTGRES_PASSWORD、JWT_SECRET_KEY、CONFIG_ENCRYPTION_KEY、HOST_PORT
 docker compose up -d --build
 ```
 
@@ -71,6 +71,7 @@ http://服务器IP:HOST_PORT/api/docs
 
 关键变量：
 
+- `CONTAINER_PREFIX`：容器名前缀，默认 `worklog`。同机部署测试环境时必须换成独立值。
 - `HOST_PORT`：宿主机暴露端口，默认 `8080`。
 - `POSTGRES_PASSWORD`：PostgreSQL 密码。
 - `DATABASE_URL`：后端数据库连接。
@@ -123,6 +124,21 @@ docker compose exec backend alembic upgrade head
 
 ## 备份与恢复
 
+升级前推荐使用内置脚本自动备份数据库和文件目录：
+
+```bash
+./scripts/backup.sh ./.env
+```
+
+无损升级流程：
+
+```bash
+git pull
+./scripts/upgrade.sh ./.env
+```
+
+脚本会先备份 PostgreSQL 数据和 `data/uploads`、`data/exports`、`data/certs`，再构建镜像、启动容器并执行 Alembic 迁移。迁移文件只做增量变更，不会删除已有业务数据。
+
 备份数据库：
 
 ```bash
@@ -166,6 +182,24 @@ docker compose logs -f backend
 docker compose logs -f frontend
 docker compose logs -f nginx
 ```
+
+## 隔离测试环境
+
+同一台服务器上部署测试环境时，不复用生产路径、容器名、端口和数据卷：
+
+```bash
+cp deploy/staging.env.example .env.staging
+# 修改 .env.staging 中的密码、密钥和 HOST_PORT
+docker compose --env-file .env.staging up -d --build
+```
+
+建议测试部署路径与生产分离，例如：
+
+```text
+/root/App/WorkLog-Staging
+```
+
+默认测试端口示例为 `18081`。生产环境继续使用自己的 `.env` 和 `CONTAINER_PREFIX=worklog`。
 
 ## 常见问题
 

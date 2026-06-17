@@ -48,6 +48,7 @@ class Team(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
 
 
 class TeamMember(Base):
@@ -162,7 +163,10 @@ class Attachment(Base):
     related_id: Mapped[int] = mapped_column(Integer, nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_url: Mapped[str] = mapped_column(String(600), nullable=False)
+    storage_path: Mapped[str | None] = mapped_column(String(800))
+    mime_type: Mapped[str | None] = mapped_column(String(160))
     file_size: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
     uploader_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import decrypt_secret
-from app.models import AIGenerationRecord, AIModelConfig, AIPromptTemplate, OvertimeLog, Project, Task, WorkLog
+from app.models import AIGenerationRecord, AIModelConfig, AIPromptTemplate, Attachment, OvertimeLog, Project, Task, WorkLog
 from app.services.ai.desensitizer import classify_security_work, desensitize_text, normalize_security_terms
 from app.services.ai.prompt_renderer import render_prompt
 from app.services.ai.providers import ProviderConfig, build_provider
@@ -80,9 +80,14 @@ def seed_prompt_templates(db: Session) -> None:
     db.commit()
 
 
-def _record_to_line(record: WorkLog, desensitize: bool) -> dict[str, Any]:
+def _record_to_line(record: WorkLog, desensitize: bool, attachments: dict[int, list[Attachment]] | None = None) -> dict[str, Any]:
     text = normalize_security_terms(" ".join(filter(None, [record.title, record.content, record.result, record.problem])))
     safe_text = desensitize_text(text) if desensitize else text
+    attachment_notes = []
+    for attachment in (attachments or {}).get(record.id, []):
+        note = attachment.summary or attachment.file_name
+        if note:
+            attachment_notes.append(desensitize_text(note) if desensitize else note)
     return {
         "date": record.work_date.isoformat(),
         "title": desensitize_text(record.title) if desensitize else record.title,
@@ -90,6 +95,7 @@ def _record_to_line(record: WorkLog, desensitize: bool) -> dict[str, Any]:
         "work_type": record.work_type,
         "duration_hours": record.duration_hours,
         "category": classify_security_work(safe_text),
+        "attachments": "；".join(attachment_notes),
     }
 
 
@@ -106,6 +112,16 @@ def build_input_snapshot(
         .order_by(WorkLog.work_date.asc(), WorkLog.id.asc())
         .all()
     )
+    log_ids = [row.id for row in work_logs]
+    attachments_by_log: dict[int, list[Attachment]] = {log_id: [] for log_id in log_ids}
+    if log_ids:
+        for attachment in (
+            db.query(Attachment)
+            .filter(Attachment.related_type == "work_log", Attachment.related_id.in_(log_ids))
+            .order_by(Attachment.created_at.asc(), Attachment.id.asc())
+            .all()
+        ):
+            attachments_by_log.setdefault(attachment.related_id, []).append(attachment)
     tasks = db.query(Task).filter(Task.creator_id == user_id).order_by(Task.updated_at.desc()).limit(200).all()
     overtime_logs = (
         db.query(OvertimeLog)
@@ -115,7 +131,7 @@ def build_input_snapshot(
     )
     projects = db.query(Project).filter(Project.owner_id == user_id).order_by(Project.updated_at.desc()).limit(100).all()
     return {
-        "work_logs": [_record_to_line(row, enable_desensitization) for row in work_logs],
+        "work_logs": [_record_to_line(row, enable_desensitization, attachments_by_log) for row in work_logs],
         "tasks": [
             {
                 "title": desensitize_text(row.title) if enable_desensitization else row.title,
@@ -176,6 +192,8 @@ def local_generate(snapshot: dict[str, Any], options: dict[str, Any]) -> str:
     seen: set[str] = set()
     for row in snapshot.get("work_logs", []):
         content = row.get("content") or row.get("title") or ""
+        if row.get("attachments"):
+            content = f"{content}；附件摘要：{row['attachments']}"
         category = row.get("category") or "其他工作"
         item = normalize_security_terms(content).strip("。；; ")
         if not item:

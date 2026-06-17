@@ -61,6 +61,30 @@
           <n-form-item label="处理结果"><n-input v-model:value="form.result" type="textarea" :autosize="{ minRows: 2 }" /></n-form-item>
           <n-form-item label="问题风险"><n-input v-model:value="form.problem" type="textarea" :autosize="{ minRows: 2 }" /></n-form-item>
           <n-form-item label="后续计划"><n-input v-model:value="form.next_plan" type="textarea" :autosize="{ minRows: 2 }" /></n-form-item>
+          <n-form-item v-if="editing?.id" label="附件">
+            <div class="attachment-box">
+              <n-input v-model:value="attachmentSummary" type="textarea" :autosize="{ minRows: 2 }" placeholder="附件摘要，可作为 AI 周报输入" />
+              <n-upload :show-file-list="false" :custom-request="uploadAttachment">
+                <n-button :loading="attachmentLoading">上传附件</n-button>
+              </n-upload>
+              <n-list v-if="attachments.length" bordered>
+                <n-list-item v-for="file in attachments" :key="file.id">
+                  <div class="attachment-row">
+                    <div>
+                      <strong>{{ file.file_name }}</strong>
+                      <span>{{ formatSize(file.file_size) }}</span>
+                      <p v-if="file.summary">{{ file.summary }}</p>
+                    </div>
+                    <n-space size="small">
+                      <n-button size="tiny" tag="a" :href="attachmentApi.downloadUrl(file.id)" target="_blank">下载</n-button>
+                      <n-button size="tiny" type="error" secondary @click="deleteAttachment(file)">删除</n-button>
+                    </n-space>
+                  </div>
+                </n-list-item>
+              </n-list>
+              <n-text v-else depth="3">暂无附件</n-text>
+            </div>
+          </n-form-item>
         </n-form>
         <template #footer>
           <n-space justify="end">
@@ -77,10 +101,20 @@
 <script setup lang="ts">
 import dayjs from "dayjs";
 import { computed, h, onMounted, reactive, ref, watch } from "vue";
-import { NButton, NSpace, NTag, useDialog, useMessage, type DataTableColumns, type FormInst, type FormRules } from "naive-ui";
+import {
+  NButton,
+  NSpace,
+  NTag,
+  useDialog,
+  useMessage,
+  type DataTableColumns,
+  type FormInst,
+  type FormRules,
+  type UploadCustomRequestOptions
+} from "naive-ui";
 import PageHeader from "@/components/PageHeader.vue";
 import EmptyState from "@/components/EmptyState.vue";
-import { workLogApi, type WorkLog } from "@/api/resources";
+import { attachmentApi, workLogApi, type Attachment, type WorkLog } from "@/api/resources";
 import { labelOf, securityTemplates, workTypeOptions } from "@/utils/options";
 
 const message = useMessage();
@@ -92,6 +126,9 @@ const view = ref("timeline");
 const formRef = ref<FormInst | null>(null);
 const selectedTemplate = ref<string | null>(null);
 const items = ref<WorkLog[]>([]);
+const attachments = ref<Attachment[]>([]);
+const attachmentSummary = ref("");
+const attachmentLoading = ref(false);
 const editing = ref<WorkLog | null>(null);
 const total = ref(0);
 const filters = reactive<any>({ keyword: "", date_start: null, date_end: null, work_type: null, page: 1, page_size: 20 });
@@ -163,15 +200,19 @@ function onPage(page: number) {
 function openCreate() {
   editing.value = null;
   selectedTemplate.value = null;
+  attachments.value = [];
+  attachmentSummary.value = "";
   resetForm();
   drawerVisible.value = true;
 }
 
-function openEdit(row: WorkLog) {
+async function openEdit(row: WorkLog) {
   editing.value = row;
   selectedTemplate.value = null;
+  attachmentSummary.value = "";
   Object.assign(form, row);
   drawerVisible.value = true;
+  await loadAttachments(row.id);
 }
 
 function applyTemplate(value: string | null) {
@@ -194,6 +235,47 @@ async function save(continueAdd: boolean) {
   } finally {
     saving.value = false;
   }
+}
+
+async function loadAttachments(logId: number) {
+  attachmentLoading.value = true;
+  try {
+    attachments.value = await attachmentApi.list("work_log", logId);
+  } finally {
+    attachmentLoading.value = false;
+  }
+}
+
+async function uploadAttachment(options: UploadCustomRequestOptions) {
+  const rawFile = options.file.file;
+  if (!editing.value?.id || !rawFile) {
+    options.onError();
+    return;
+  }
+  attachmentLoading.value = true;
+  try {
+    await attachmentApi.upload("work_log", editing.value.id, rawFile, attachmentSummary.value);
+    attachmentSummary.value = "";
+    await loadAttachments(editing.value.id);
+    message.success("附件已上传");
+    options.onFinish();
+  } catch (error) {
+    options.onError();
+  } finally {
+    attachmentLoading.value = false;
+  }
+}
+
+function formatSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+async function deleteAttachment(file: Attachment) {
+  await attachmentApi.remove(file.id);
+  message.success("附件已删除");
+  if (editing.value?.id) await loadAttachments(editing.value.id);
 }
 
 function remove(row: WorkLog) {
@@ -220,5 +302,31 @@ onMounted(() => {
 .timeline-content p {
   margin: 8px 0;
   color: #334155;
+}
+
+.attachment-box {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+}
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.attachment-row strong,
+.attachment-row span {
+  display: block;
+}
+
+.attachment-row span,
+.attachment-row p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
 }
 </style>

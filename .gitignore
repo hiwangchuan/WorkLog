@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 *.pyc
 __pycache__/
 .venv/
@@ -6,6 +8,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+._*
 data/uploads/*
 data/exports/*
 data/logs/*
