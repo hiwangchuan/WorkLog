@@ -1,0 +1,16 @@
+from app.models.entities import (  # noqa: F401
+    AIGenerationRecord,
+    AIModelConfig,
+    AIPromptTemplate,
+    Attachment,
+    OvertimeLog,
+    Project,
+    SystemSetting,
+    Tag,
+    Task,
+    TaskTag,
+    Team,
+    TeamMember,
+    User,
+    WorkLog,
+)
